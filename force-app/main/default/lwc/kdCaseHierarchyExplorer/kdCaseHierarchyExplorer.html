@@ -1,18 +1,31 @@
 <template>
-    <!-- 
-      lightning-card is a base Lightning component that wraps the grid 
-      in a clean, styled container with a title bar.
-    -->
-    <lightning-card title="Case Hierarchy (Skeleton)">
-        <!-- 
-          lightning-tree-grid displays a hierarchical (parent/child) table layout.
-          It's used here to show parent and child Cases in an expandable tree.
-        -->
-        <lightning-tree-grid
-            columns={columns}
-            data={treeData.data}
-            key-field="id"
-            expanded-rows={expandedRows}>
-        </lightning-tree-grid>
-    </lightning-card>
+  <!-- Cache buster: v3.0.0 -->
+  <lightning-card variant="Narrow" title="Case Hierarchy">
+      <!-- Data table -->
+      <template if:true={treeData.data}>
+          <lightning-tree-grid
+              key-field="id"
+              columns={columns}
+              data={treeData.data}
+              expanded-rows={expandedRows}
+              hide-checkbox-column
+              onrowtoggle={handleToggle}
+              onrowclick={handleRowClick}>
+          </lightning-tree-grid>
+      </template>
+
+      <!-- Spinner -->
+      <template if:true={treeData.isLoading}>
+          <div class="slds-p-around_medium slds-align_absolute-center">
+              <lightning-spinner size="small"></lightning-spinner>
+          </div>
+      </template>
+
+      <!-- Inline error (replaces <c:error-panel>) -->
+      <template if:true={hasError}>
+          <div class="slds-text-color_error slds-p-around_medium">
+              {errorMessage}
+          </div>
+      </template>
+  </lightning-card>
 </template>

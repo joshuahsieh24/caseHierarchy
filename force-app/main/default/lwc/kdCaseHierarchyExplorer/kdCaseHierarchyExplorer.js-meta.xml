@@ -2,19 +2,17 @@
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata"
                           fqn="kdCaseHierarchyExplorer"
                           apiVersion="60.0">
-    <!-- Required to make the component visible in the Lightning App Builder -->
+    <!-- Cache buster: v4.0.0 -->
     <isExposed>true</isExposed>
-
-    <!-- Declare this component usable in Record Pages -->
     <targets>
         <target>lightning__RecordPage</target>
     </targets>
-
-    <!-- Limit this component to be used only on Case records -->
     <targetConfigs>
         <targetConfig targets="lightning__RecordPage">
             <objects>
                 <object>Case</object>
+                <object>Account</object>       <!-- NEW -->
+                <object>Opportunity</object>   <!-- NEW -->
             </objects>
         </targetConfig>
     </targetConfigs>
