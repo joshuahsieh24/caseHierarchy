@@ -1,31 +1,31 @@
 <template>
-  <!-- Cache buster: v3.0.0 -->
-  <lightning-card variant="Narrow" title="Case Hierarchy">
-      <!-- Data table -->
-      <template if:true={treeData.data}>
-          <lightning-tree-grid
-              key-field="id"
-              columns={columns}
-              data={treeData.data}
-              expanded-rows={expandedRows}
-              hide-checkbox-column
-              onrowtoggle={handleToggle}
-              onrowclick={handleRowClick}>
-          </lightning-tree-grid>
-      </template>
+    <!-- Loading -------------------------------------------------------- -->
+    <template if:true={treeData.isLoading}>
+        <lightning-card title="Case Hierarchy">
+            <lightning-spinner alternative-text="Loading cases…"></lightning-spinner>
+        </lightning-card>
+    </template>
 
-      <!-- Spinner -->
-      <template if:true={treeData.isLoading}>
-          <div class="slds-p-around_medium slds-align_absolute-center">
-              <lightning-spinner size="small"></lightning-spinner>
-          </div>
-      </template>
+    <!-- Success -------------------------------------------------------- -->
+    <template if:true={treeData.data}>
+        <lightning-card title="Case Hierarchy">
+            <lightning-tree-grid
+                    key-field="id"
+                    data={treeData.data}
+                    columns={columns}
+                    expanded-rows={expandedRows}
+                    hide-checkbox-column
+                    onrowtoggle={handleRowToggle}>
+            </lightning-tree-grid>
+        </lightning-card>
+    </template>
 
-      <!-- Inline error (replaces <c:error-panel>) -->
-      <template if:true={hasError}>
-          <div class="slds-text-color_error slds-p-around_medium">
-              {errorMessage}
-          </div>
-      </template>
-  </lightning-card>
+    <!-- Error ---------------------------------------------------------- -->
+    <template if:true={hasError}>
+        <lightning-card title="Case Hierarchy">
+            <div class="slds-text-color_error slds-m-around_medium">
+                {errorMessage}
+            </div>
+        </lightning-card>
+    </template>
 </template>
