@@ -1,118 +1,117 @@
-/**
- * KD_CaseHierarchyController
- * --------------------------
- * Returns a tree of CaseWrapper objects for Case, Account, or Opportunity
- * record pages.
- *
- * v2025-07-24  Added childCount and flattened Opportunity mode
- * v2025-07-24b Switched Opportunity lookup to Opportunity__c (custom field)
- */
+/* =========================================================================
+ * KD_CaseHierarchyController.cls
+ * -------------------------------------------------------------------------
+ *  ▸ Returns a nested hierarchy of CaseWrapper objects for a Lightning-
+ *    Web Component tree-grid.  
+ *  ▸ Now includes Priority & Type.  
+ *  ▸ No longer fabricates an empty child placeholder.
+ * ========================================================================= */
 public with sharing class KD_CaseHierarchyController {
 
-    /* === PUBLIC ENTRY =================================================== */
+    /*-----------------------------------------------------------
+     * PUBLIC – entry point
+     *-----------------------------------------------------------*/
     @AuraEnabled(cacheable=true)
-    public static List<CaseWrapper> getCaseHierarchy(Id recordId, String objectName) {
-        if (recordId == null || objectName == null) return new List<CaseWrapper>();
+    public static CaseWrapper getHierarchy(Id contextRecordId) {
+        // 1️⃣  Determine context (Account, Opportunity, or Case)
+        Schema.SObjectType objType = contextRecordId.getSObjectType();
 
-        if (objectName == 'Case')        return buildHierarchyFromCase(recordId);
-        if (objectName == 'Account')     return buildHierarchyFromAccount(recordId);
-        if (objectName == 'Opportunity') return buildHierarchyFromOpportunity(recordId);
+        Set<Id> rootIds = new Set<Id>();
+        if (objType == Account.SObjectType) {
+            for (Case c : [
+                SELECT Id
+                FROM Case
+                WHERE AccountId = :contextRecordId
+            ]) rootIds.add(c.Id);
 
-        return new List<CaseWrapper>();
-    }
+        } else if (objType == Opportunity.SObjectType) {
+            for (Case c : [
+                SELECT Id
+                FROM Case
+                WHERE Opportunity__c = :contextRecordId
+            ]) rootIds.add(c.Id);
 
-    /* === MODE: CASE ===================================================== */
-    private static List<CaseWrapper> buildHierarchyFromCase(Id caseId) {
-        List<Case> cases = [
-            SELECT Id, CaseNumber, Subject, Status, ParentId
-            FROM   Case
-            WHERE  Id = :caseId
-               OR  ParentId = :caseId
-            WITH  SECURITY_ENFORCED
-        ];
-        return buildTreeFromCases(cases);
-    }
-
-    /* === MODE: ACCOUNT ================================================== */
-    private static List<CaseWrapper> buildHierarchyFromAccount(Id accountId) {
-        List<Case> cases = [
-            SELECT Id, CaseNumber, Subject, Status, ParentId
-            FROM   Case
-            WHERE  AccountId = :accountId
-            WITH  SECURITY_ENFORCED
-        ];
-        return buildTreeFromCases(cases);
-    }
-
-    /* === MODE: OPPORTUNITY (flat) ====================================== */
-    private static List<CaseWrapper> buildHierarchyFromOpportunity(Id oppId) {
-
-        /* NOTE: uses custom lookup field Opportunity__c */
-        List<CaseWrapper> wrappers = new List<CaseWrapper>();
-        for (Case c : [
-                SELECT Id, CaseNumber, Subject, Status
-                FROM   Case
-                WHERE  Opportunity__c = :oppId
-                WITH   SECURITY_ENFORCED
-            ]) {
-
-            wrappers.add(new CaseWrapper(c.Id, c.CaseNumber, c.Subject, c.Status));
+        } else if (objType == Case.SObjectType) {
+            rootIds.add(contextRecordId);
         }
-        return wrappers;   /* flat list – no parent/child relations */
-    }
 
-    /* === HELPER: build tree from a Case list =========================== */
-    private static List<CaseWrapper> buildTreeFromCases(List<Case> cases) {
+        if (rootIds.isEmpty()) {
+            // Return a placeholder wrapper to indicate no cases found
+            return new CaseWrapper(
+                'no-cases', 'No Cases', 
+                'No cases found for this record', 'N/A', 'N/A', 'N/A'
+            );
+        }
 
-        Map<Id,CaseWrapper> wrapById = new Map<Id,CaseWrapper>();
+        // 2️⃣  Bulk-fetch all descendant cases (1 SOQL using ParentId)
+        Map<Id, CaseWrapper> wrapById = new Map<Id, CaseWrapper>();
+        List<Case> cases = [
+            SELECT Id, CaseNumber, Subject, Status,
+                   Priority, Type, ParentId
+            FROM Case
+            WHERE Id               IN :rootIds
+               OR ParentId         IN :rootIds
+               OR Parent.ParentId  IN :rootIds   /* handles grandchildren */
+        ];
+
+        // 3️⃣  Build wrappers & child links
         for (Case c : cases) {
-            wrapById.put(c.Id, new CaseWrapper(c.Id, c.CaseNumber, c.Subject, c.Status));
+            wrapById.put(
+                c.Id,
+                new CaseWrapper(
+                    c.Id,            c.CaseNumber,
+                    c.Subject,       c.Status,
+                    c.Priority,      c.Type
+                )
+            );
         }
-
-        /* attach children */
         for (Case c : cases) {
             if (c.ParentId != null && wrapById.containsKey(c.ParentId)) {
-                wrapById.get(c.ParentId).children.add(wrapById.get(c.Id));
+                wrapById.get(c.ParentId).children.add(
+                    wrapById.get(c.Id)
+                );
             }
         }
 
-        /* collect roots & set child counts */
-        List<CaseWrapper> roots = new List<CaseWrapper>();
-        for (Case c : cases) {
-            if (c.ParentId == null || !wrapById.containsKey(c.ParentId)) {
-                roots.add(wrapById.get(c.Id));
-            }
+        // 4️⃣  Calculate #children; return first root wrapper
+        for (CaseWrapper w : wrapById.values()) {
+            w.childCount = w.children.size();
         }
-        setCountsRecursively(roots);
-        return roots;
+        return wrapById.get(rootIds.iterator().next());
     }
 
-    private static void setCountsRecursively(List<CaseWrapper> nodes) {
-        for (CaseWrapper n : nodes) {
-            n.childCount = n.children.size();
-            setCountsRecursively(n.children);
-        }
-    }
-
-    /* === INNER WRAPPER ================================================== */
+    /*-----------------------------------------------------------
+     * INNER CLASS – wrapper for LWC
+     *-----------------------------------------------------------*/
     public class CaseWrapper {
+        /* core fields sent to the client */
         @AuraEnabled public String  id;
         @AuraEnabled public String  caseNumber;
         @AuraEnabled public String  subject;
         @AuraEnabled public String  status;
-        @AuraEnabled public Integer childCount = 0;
-
+        @AuraEnabled public String  priority;     // NEW
+        @AuraEnabled public String  caseType;     // NEW
+        @AuraEnabled public Integer childCount;
         @AuraEnabled public List<CaseWrapper> children = new List<CaseWrapper>();
 
-        /* expose for lightning-tree-grid recursion */
+        /* getter so Lightning can access nested children */
         @AuraEnabled
         public List<CaseWrapper> get_children() { return children; }
 
-        public CaseWrapper(String id, String num, String subj, String stat) {
+        /* constructor */
+        public CaseWrapper(String id,
+                           String num,
+                           String subj,
+                           String stat,
+                           String pri,
+                           String typ) {
             this.id         = id;
             this.caseNumber = num;
             this.subject    = subj;
             this.status     = stat;
+            this.priority   = pri;
+            this.caseType   = typ;
+            this.childCount = 0;
         }
     }
 }

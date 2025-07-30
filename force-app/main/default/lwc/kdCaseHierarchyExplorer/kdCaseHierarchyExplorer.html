@@ -1,22 +1,32 @@
 <template>
     <!-- Loading -------------------------------------------------------- -->
-    <template if:true={treeData.isLoading}>
+    <template if:true={isLoading}>
         <lightning-card title="Case Hierarchy">
             <lightning-spinner alternative-text="Loading cases…"></lightning-spinner>
         </lightning-card>
     </template>
 
     <!-- Success -------------------------------------------------------- -->
-    <template if:true={treeData.data}>
+    <template if:true={treeData}>
         <lightning-card title="Case Hierarchy">
             <lightning-tree-grid
                     key-field="id"
-                    data={treeData.data}
+                    data={treeData}
                     columns={columns}
                     expanded-rows={expandedRows}
                     hide-checkbox-column
                     onrowtoggle={handleRowToggle}>
             </lightning-tree-grid>
+        </lightning-card>
+    </template>
+
+    <!-- No Cases Found ------------------------------------------------- -->
+    <template if:true={noCasesFound}>
+        <lightning-card title="Case Hierarchy">
+            <div class="slds-text-color_weak slds-m-around_medium slds-text-align_center">
+                <lightning-icon icon-name="utility:info" size="small" class="slds-m-right_x-small"></lightning-icon>
+                No cases found for this record. Cases will appear here when they are created and linked to this record.
+            </div>
         </lightning-card>
     </template>
 
@@ -28,4 +38,4 @@
             </div>
         </lightning-card>
     </template>
-</template>
+</template> 

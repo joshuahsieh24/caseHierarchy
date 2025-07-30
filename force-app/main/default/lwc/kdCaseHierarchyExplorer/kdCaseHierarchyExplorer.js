@@ -1,102 +1,89 @@
+/* =========================================================================
+ * kdCaseHierarchyExplorer.js
+ * -------------------------------------------------------------------------
+ *  ▸ Renders a tree-grid for case hierarchies.
+ *  ▸ Columns now include Priority & Type.
+ *  ▸ Dummy "(No child cases)" node removed.
+ * ========================================================================= */
 import { LightningElement, api, wire } from 'lwc';
-import { CurrentPageReference }        from 'lightning/navigation';
-import getCaseHierarchy                from '@salesforce/apex/KD_CaseHierarchyController.getCaseHierarchy';
+import getHierarchy from '@salesforce/apex/KD_CaseHierarchyController.getHierarchy'; // Updated method reference
 
-/* ───────────────────────── Columns ───────────────────────── */
+/* ----------------------------- Column spec ----------------------------- */
 const COLUMNS = [
-    {
-        label         : 'Case #',
-        fieldName     : 'caseUrl',
-        type          : 'url',
-        typeAttributes: {
-            label : { fieldName: 'caseNumber' },
-            target: '_self'
-        },
-        initialWidth  : 120
-    },
-    { label: 'Subject',     fieldName: 'subject' },
-    { label: 'Status',      fieldName: 'status'  },
-    { label: 'Child Count', fieldName: 'childCount', type: 'number', initialWidth: 110 }
+    { label: 'Case #',   fieldName: 'caseUrl', type: 'url',
+      typeAttributes: { label: { fieldName: 'caseNumber' }, target: '_blank' },
+      initialWidth: 110 },
+    { label: 'Subject',  fieldName: 'subject', wrapText: true },
+    { label: 'Status',   fieldName: 'status',  initialWidth: 120 },
+    { label: 'Priority', fieldName: 'priority', initialWidth: 100 },   // NEW
+    { label: 'Type',     fieldName: 'caseType', initialWidth: 120 },   // NEW
+    { label: 'Child Count', fieldName: 'childCount',
+      type: 'number', initialWidth: 110 }
 ];
 
 export default class KdCaseHierarchyExplorer extends LightningElement {
 
-    /* ─── public params (with fallback) ─── */
-    @api recordId;
-    @api objectApiName;
+    @api recordId;              // context record
 
-    @wire(CurrentPageReference)
-    wiredPageRef(ref) {
-        if (ref && ref.attributes) {
-            this.recordId      = this.recordId      || ref.attributes.recordId;
-            this.objectApiName = this.objectApiName || ref.attributes.objectApiName;
-        }
-    }
+    columns = COLUMNS;          // bound into template
+    treeData;                   // wired data holder
+    isLoading = true;           // loading state
+    hasError = false;           // error state
+    errorMessage = '';          // error message
+    noCasesFound = false;       // no cases found state
+    expandedRows = [];          // expanded rows for tree grid
 
-    /* ─── reactive state ─── */
-    columns      = COLUMNS;
-    expandedRows = [];
-    treeData     = { data: undefined, isLoading: true, error: undefined };
-
-    /* ─── Apex wire ─── */
-    @wire(getCaseHierarchy,
-          { recordId: '$recordId', objectName: '$objectApiName' })
+    /* ------------ Wire Apex → transform → template ------------ */
+    @wire(getHierarchy, { contextRecordId: '$recordId' })
     wiredHierarchy({ data, error }) {
+        this.isLoading = false;
+        
         if (data) {
-            const clone = JSON.parse(JSON.stringify(data));
-            this.normalise(clone);
-
-            /* auto-expand root nodes */
-            this.expandedRows = clone.map(n => n.id);
-
-            this.treeData = { data: clone, isLoading: false };
+            const root = JSON.parse(JSON.stringify(data));
+            
+            // Check if this is a placeholder for no cases
+            if (root.id === 'no-cases') {
+                this.treeData = null;
+                this.hasError = false;
+                this.noCasesFound = true;
+            } else {
+                this.normalise([root]);
+                this.treeData = [root];
+                this.hasError = false;
+                this.noCasesFound = false;
+            }
         } else if (error) {
-            this.treeData = { error, isLoading: false };
+            this.hasError = true;
+            this.errorMessage = error.body?.message || 'An error occurred while loading the case hierarchy.';
+            // eslint-disable-next-line no-console
+            console.error('Case hierarchy error', error);
         }
     }
 
-    /* ──────────────────────────────────────────────────────────
-     * normalise()  –  decorate nodes & add dummy children once
-       ──────────────────────────────────────────────────────── */
+    /* -----------------------------------------------------------
+     * normalise() – decorate nodes & strip dummy rows
+     * --------------------------------------------------------- */
     normalise(nodes) {
-        nodes.forEach(n => {
+        nodes.forEach(node => {
+            const hasChildren = node.children && node.children.length > 0;
 
-            const isDummy = n.id && String(n.id).endsWith('-dummy');
+            /* make Case # clickable */
+            node.caseUrl = '/' + node.id;
 
-            /* always a number so grid shows “0” */
-            n.childCount = Number(n.childCount || 0);
+            /* ONLY expose real children to <lightning-tree-grid> */
+            node._children = hasChildren ? node.children : [];
 
-            /* Case link only for real rows */
-            n.caseUrl = isDummy ? '' : '/' + n.id;
-
-            /* add a single dummy child if this is a REAL row with 0 kids */
-            if (!isDummy && (!n.children || n.children.length === 0)) {
-                n.children = [{
-                    id        : `${n.id}-dummy`,
-                    caseNumber: '—',
-                    subject   : '(No child cases)',
-                    status    : '',
-                    childCount: 0,
-                    children  : []
-                }];
-            }
-
-            /* expose via _children so <lightning-tree-grid> recurses */
-            n._children = n.children || [];
-
-            /* recurse only into real children, not the dummy itself */
-            if (!isDummy && n.children && n.children.length) {
-                this.normalise(n.children);
+            /* recurse */
+            if (hasChildren) {
+                this.normalise(node.children);
             }
         });
     }
 
-    /* remember expand / collapse state */
-    handleRowToggle(evt) {
-        this.expandedRows = evt.detail.expandedRows;
+    /* -----------------------------------------------------------
+     * handleRowToggle() – handle tree grid row expansion
+     * --------------------------------------------------------- */
+    handleRowToggle(event) {
+        this.expandedRows = event.detail.expandedRows;
     }
-
-    /* template helpers */
-    get hasError()     { return !!this.treeData.error; }
-    get errorMessage() { return this.treeData.error?.body?.message || this.treeData.error?.message; }
 }
