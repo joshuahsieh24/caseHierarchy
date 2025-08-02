@@ -20,6 +20,7 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     @track draftValues = [];
 
     treeData;
+    originalData; // Store the original data from Apex
     expandedRows = [];
     isLoading = true;
     noCasesFound = false;
@@ -30,11 +31,16 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     wiredHierarchy({ data, error }) {
         this.isLoading = false;
         if (data) {
+            // Store the original data
+            this.originalData = JSON.parse(JSON.stringify(data));
+            console.log('Raw data from Apex:', this.originalData);
+            
             const root = JSON.parse(JSON.stringify(data));
             this._normalise([root]);
             this.treeData = [root];
             this.expandedRows = [root.id];
             this.noCasesFound = root.id === 'no-cases';
+            console.log('Processed tree data:', this.treeData);
         } else if (error) {
             this.hasError = true;
             this.errorMessage = error.body?.message || JSON.stringify(error);
@@ -160,14 +166,16 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     }
 
     handleCellChange(evt) {
+        console.log('=== CELL CHANGE DEBUG START ===');
         console.log('Cell change event received:', evt.detail);
         const newDraftValues = evt.detail.draftValues || [];
+        console.log('New draft values:', JSON.stringify(newDraftValues, null, 2));
         
         // Process each draft value change
         newDraftValues.forEach(newDraft => {
             const rowId = newDraft._id;
             
-            console.log('Processing draft change for row:', rowId, newDraft);
+            console.log('Processing draft change for row:', rowId, JSON.stringify(newDraft, null, 2));
             
             // Update or add to draft values
             const existingIndex = this.draftValues.findIndex(existing => existing._id === rowId);
@@ -177,15 +185,18 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                     ...this.draftValues[existingIndex], 
                     ...newDraft 
                 };
+                console.log('Merged with existing draft value:', JSON.stringify(this.draftValues[existingIndex], null, 2));
             } else {
                 // Add new draft value
                 this.draftValues.push({ ...newDraft });
+                console.log('Added new draft value:', JSON.stringify(newDraft, null, 2));
             }
             
             // Update the corresponding draft column immediately
             const columnIndex = this.draftColumns.findIndex(col => col._id === rowId);
             if (columnIndex !== -1) {
                 console.log('Found column to update at index:', columnIndex);
+                console.log('Current column:', JSON.stringify(this.draftColumns[columnIndex], null, 2));
                 
                 // Create updated column object
                 const updatedColumn = { ...this.draftColumns[columnIndex] };
@@ -208,6 +219,7 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 
                 // Replace the column in the array
                 this.draftColumns[columnIndex] = updatedColumn;
+                console.log('Updated column:', JSON.stringify(updatedColumn, null, 2));
             } else {
                 console.error('Could not find column with _id:', rowId);
             }
@@ -217,18 +229,22 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         this.draftValues = [...this.draftValues];
         this.draftColumns = [...this.draftColumns];
         
-        console.log('Updated draft values:', this.draftValues);
-        console.log('Updated draft columns:', this.draftColumns);
+        console.log('Final draft values:', JSON.stringify(this.draftValues, null, 2));
+        console.log('Final draft columns:', JSON.stringify(this.draftColumns, null, 2));
+        console.log('=== CELL CHANGE DEBUG END ===');
     }
 
     handleSave() {
-        console.log('Saving with draft values:', this.draftValues);
-        console.log('Saving with draft columns:', this.draftColumns);
+        console.log('=== SAVE DEBUG START ===');
+        console.log('Draft values at save:', JSON.stringify(this.draftValues, null, 2));
+        console.log('Draft columns at save:', JSON.stringify(this.draftColumns, null, 2));
         
         // Build the final columns from draftColumns (which should have the latest values)
-        this.columns = this.draftColumns
+        const newColumns = this.draftColumns
             .filter(col => col.fieldName && col.label && col.label.trim() !== '')
-            .map(col => {
+            .map((col, index) => {
+                console.log(`Processing column ${index}:`, JSON.stringify(col, null, 2));
+                
                 const finalFieldName = col.fieldName;
                 const finalLabel = col.label;
                 
@@ -237,18 +253,32 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 return this._buildColumn(finalLabel, finalFieldName);
             });
 
-        console.log('Final columns applied:', this.columns);
+        console.log('Final columns applied:', newColumns);
+        console.log('=== SAVE DEBUG END ===');
 
-        // Force a refresh of the tree grid to reflect column changes
-        if (this.treeData) {
-            // Create a new reference to trigger reactivity
-            this.treeData = [...this.treeData];
-        }
+        // Update columns immediately
+        this.columns = newColumns;
 
         // Exit config mode
         this.isConfigMode = false;
         this.draftColumns = [];
         this.draftValues = [];
+
+        // Force refresh tree data from original data
+        if (this.originalData) {
+            console.log('Refreshing tree data from original data');
+            const refreshedRoot = JSON.parse(JSON.stringify(this.originalData));
+            this._normalise([refreshedRoot]);
+            
+            // Force reactivity by setting to null first, then the new data
+            this.treeData = null;
+            
+            // Use setTimeout to ensure the null assignment is processed
+            setTimeout(() => {
+                this.treeData = [refreshedRoot];
+                console.log('Tree data completely refreshed:', this.treeData);
+            }, 0);
+        }
     }
 
     handleCancel() {
@@ -266,6 +296,8 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     }
 
     _buildColumn(label, fieldName) {
+        console.log(`_buildColumn called with label: "${label}", fieldName: "${fieldName}"`);
+        
         const base = { 
             label, 
             fieldName, 
@@ -276,7 +308,7 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
 
         // Handle special case for case number URL
         if (fieldName === 'caseNumber') {
-            return { 
+            const result = { 
                 ...base, 
                 fieldName: 'caseUrl',
                 type: 'url',
@@ -285,11 +317,14 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                     target: '_blank' 
                 } 
             };
+            console.log(`Built caseNumber column:`, result);
+            return result;
         }
 
+        let result;
         switch (fieldName) {
             case 'caseUrl':
-                return { 
+                result = { 
                     ...base, 
                     type: 'url',
                     typeAttributes: { 
@@ -297,21 +332,30 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                         target: '_blank' 
                     } 
                 };
+                break;
             case 'subject':
             case 'description':
-                return { ...base, wrapText: true, initialWidth: 300 };
+                result = { ...base, wrapText: true, initialWidth: 300 };
+                break;
             case 'childCount':
-                return { ...base, type: 'number', initialWidth: 100 };
+                result = { ...base, type: 'number', initialWidth: 100 };
+                break;
             case 'createdDate':
             case 'lastModifiedDate':
             case 'closedDate':
-                return { ...base, type: 'date', initialWidth: 140 };
+                result = { ...base, type: 'date', initialWidth: 140 };
+                break;
             case 'isEscalated':
             case 'isClosed':
-                return { ...base, type: 'boolean', initialWidth: 110 };
+                result = { ...base, type: 'boolean', initialWidth: 110 };
+                break;
             default:
-                return base;
+                result = base;
+                break;
         }
+        
+        console.log(`Built column for ${fieldName}:`, result);
+        return result;
     }
 
     handleRowToggle(e) {
