@@ -1,89 +1,175 @@
-/* =========================================================================
- * kdCaseHierarchyExplorer.js
- * -------------------------------------------------------------------------
- *  ▸ Renders a tree-grid for case hierarchies.
- *  ▸ Columns now include Priority & Type.
- *  ▸ Dummy "(No child cases)" node removed.
- * ========================================================================= */
-import { LightningElement, api, wire } from 'lwc';
-import getHierarchy from '@salesforce/apex/KD_CaseHierarchyController.getHierarchy'; // Updated method reference
+import { LightningElement, api, wire, track } from 'lwc';
+import getHierarchy from '@salesforce/apex/KD_CaseHierarchyController.getHierarchy';
 
-/* ----------------------------- Column spec ----------------------------- */
-const COLUMNS = [
-    { label: 'Case #',   fieldName: 'caseUrl', type: 'url',
-      typeAttributes: { label: { fieldName: 'caseNumber' }, target: '_blank' },
-      initialWidth: 110 },
-    { label: 'Subject',  fieldName: 'subject', wrapText: true },
-    { label: 'Status',   fieldName: 'status',  initialWidth: 120 },
-    { label: 'Priority', fieldName: 'priority', initialWidth: 100 },   // NEW
-    { label: 'Type',     fieldName: 'caseType', initialWidth: 120 },   // NEW
-    { label: 'Child Count', fieldName: 'childCount',
-      type: 'number', initialWidth: 110 }
+const BASE_COLUMNS = [
+    { label: 'Case #', fieldName: 'caseUrl', type: 'url',
+      typeAttributes: { label: { fieldName: 'caseNumber' }, target: '_blank' } },
+    { label: 'Subject', fieldName: 'subject', wrapText: true },
+    { label: 'Status', fieldName: 'status' },
+    { label: 'Priority', fieldName: 'priority' },
+    { label: 'Type', fieldName: 'caseType' },
+    { label: 'Child Count', fieldName: 'childCount', type: 'number' }
 ];
 
 export default class KdCaseHierarchyExplorer extends LightningElement {
+    @api recordId;
 
-    @api recordId;              // context record
+    @track columns = [...BASE_COLUMNS];
+    @track isConfigMode = false;
+    @track draftColumns = [];
+    @track draftValues = [];
 
-    columns = COLUMNS;          // bound into template
-    treeData;                   // wired data holder
-    isLoading = true;           // loading state
-    hasError = false;           // error state
-    errorMessage = '';          // error message
-    noCasesFound = false;       // no cases found state
-    expandedRows = [];          // expanded rows for tree grid
+    treeData;
+    expandedRows = [];
+    isLoading = true;
+    noCasesFound = false;
+    hasError = false;
+    errorMessage = '';
 
-    /* ------------ Wire Apex → transform → template ------------ */
     @wire(getHierarchy, { contextRecordId: '$recordId' })
     wiredHierarchy({ data, error }) {
         this.isLoading = false;
-        
         if (data) {
             const root = JSON.parse(JSON.stringify(data));
-            
-            // Check if this is a placeholder for no cases
-            if (root.id === 'no-cases') {
-                this.treeData = null;
-                this.hasError = false;
-                this.noCasesFound = true;
-            } else {
-                this.normalise([root]);
-                this.treeData = [root];
-                this.hasError = false;
-                this.noCasesFound = false;
-            }
+            this._normalise([root]);
+            this.treeData = [root];
+            this.expandedRows = [root.id];
+            this.noCasesFound = root.childCount === 0;
         } else if (error) {
             this.hasError = true;
-            this.errorMessage = error.body?.message || 'An error occurred while loading the case hierarchy.';
-            // eslint-disable-next-line no-console
-            console.error('Case hierarchy error', error);
+            this.errorMessage = error.body?.message || JSON.stringify(error);
         }
     }
 
-    /* -----------------------------------------------------------
-     * normalise() – decorate nodes & strip dummy rows
-     * --------------------------------------------------------- */
-    normalise(nodes) {
-        nodes.forEach(node => {
-            const hasChildren = node.children && node.children.length > 0;
-
-            /* make Case # clickable */
-            node.caseUrl = '/' + node.id;
-
-            /* ONLY expose real children to <lightning-tree-grid> */
-            node._children = hasChildren ? node.children : [];
-
-            /* recurse */
-            if (hasChildren) {
-                this.normalise(node.children);
-            }
+    _normalise(nodes) {
+        nodes.forEach(n => {
+            n.caseUrl = '/' + n.id;
+            n._children = (n.children && n.children.length) ? n.children : [];
+            if (n._children.length) this._normalise(n._children);
         });
     }
 
-    /* -----------------------------------------------------------
-     * handleRowToggle() – handle tree grid row expansion
-     * --------------------------------------------------------- */
-    handleRowToggle(event) {
-        this.expandedRows = event.detail.expandedRows;
+    get availableApiNames() {
+        return [
+            { label: 'Case Number', value: 'caseNumber' },
+            { label: 'Subject', value: 'subject' },
+            { label: 'Status', value: 'status' },
+            { label: 'Priority', value: 'priority' },
+            { label: 'Type', value: 'caseType' },
+            { label: 'Owner', value: 'ownerName' },
+            { label: 'Account', value: 'accountName' },
+            { label: 'Contact', value: 'contactName' },
+            { label: 'Created Date', value: 'createdDate' },
+            { label: 'Last Modified', value: 'lastModifiedDate' },
+            { label: 'Closed Date', value: 'closedDate' },
+            { label: 'Escalated?', value: 'isEscalated' },
+            { label: 'Closed?', value: 'isClosed' },
+            { label: 'Child Count', value: 'childCount' }
+        ];
+    }
+
+    get configColumns() {
+        return [
+            { label: 'Label', fieldName: 'label', type: 'text', editable: true },
+            {
+                label: 'API Name',
+                fieldName: 'fieldName',
+                type: 'picklist',
+                editable: true,
+                typeAttributes: {
+                    options: this.availableApiNames,
+                    placeholder: 'Select API Name',
+                    value: { fieldName: 'fieldName' },
+                    context: { fieldName: '_id' }
+                }
+            },
+            {
+                label: ' ',
+                type: 'button-icon',
+                initialWidth: 50,
+                typeAttributes: {
+                    iconName: 'utility:close',
+                    alternativeText: 'Remove',
+                    name: 'remove',
+                    title: 'Remove',
+                    variant: 'bare'
+                }
+            }
+        ];
+    }
+
+    handleToggleConfig() {
+        this.isConfigMode = true;
+        this.draftColumns = this.columns.map((c, i) => ({ ...c, _id: i }));
+        this.draftValues = [];
+    }
+
+    handleAdd() {
+        this.draftColumns = [
+            ...this.draftColumns,
+            { _id: Date.now(), label: 'New column', fieldName: 'caseNumber' }
+        ];
+    }
+
+    handleRowAction(evt) {
+        if (evt.detail.action.name === 'remove') {
+            const rowId = evt.detail.row._id;
+            this.draftColumns = this.draftColumns.filter(c => c._id !== rowId);
+        }
+    }
+
+    handleCellChange(evt) {
+        this.draftValues = evt.detail.draftValues;
+    }
+
+    handleSave() {
+        this.draftValues.forEach(dv => {
+            const idx = this.draftColumns.findIndex(c => c._id === dv._id);
+            if (idx !== -1) {
+                this.draftColumns[idx] = { ...this.draftColumns[idx], ...dv };
+            }
+        });
+
+        this.columns = this.draftColumns.map(({ label, fieldName }) =>
+            this._buildColumn(label, fieldName)
+        );
+
+        this.isConfigMode = false;
+        this.draftColumns = [];
+        this.draftValues = [];
+    }
+
+    handleCancel() {
+        this.isConfigMode = false;
+        this.draftColumns = [];
+        this.draftValues = [];
+    }
+
+    _buildColumn(label, fieldName) {
+        const base = { label, fieldName, initialWidth: 120,
+                       minColumnWidth: 80, maxColumnWidth: 400 };
+
+        switch (fieldName) {
+            case 'caseUrl':
+                return { ...base, type: 'url',
+                         typeAttributes: { label: { fieldName: 'caseNumber' }, target: '_blank' } };
+            case 'subject':
+                return { ...base, wrapText: true, initialWidth: 300 };
+            case 'childCount':
+                return { ...base, type: 'number', initialWidth: 100 };
+            case 'createdDate':
+            case 'lastModifiedDate':
+            case 'closedDate':
+                return { ...base, type: 'date', initialWidth: 140 };
+            case 'isEscalated':
+            case 'isClosed':
+                return { ...base, type: 'boolean', initialWidth: 110 };
+            default:
+                return base;
+        }
+    }
+
+    handleRowToggle(e) {
+        this.expandedRows = e.detail.expandedRows;
     }
 }

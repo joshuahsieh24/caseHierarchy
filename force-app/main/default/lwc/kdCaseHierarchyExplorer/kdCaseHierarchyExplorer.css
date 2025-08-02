@@ -1,0 +1,4 @@
+/* Hide the inline-edit action bar lightning-datatable inserts */
+.slds-datatable__actions {
+    display: none !important;
+}
