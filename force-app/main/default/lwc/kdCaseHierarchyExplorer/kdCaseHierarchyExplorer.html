@@ -49,6 +49,7 @@
 
                 <template if:false={noCasesFound}>
                     <lightning-tree-grid
+                        key={treeGridKey}
                         key-field="id"
                         columns={columns}
                         data={treeData}
