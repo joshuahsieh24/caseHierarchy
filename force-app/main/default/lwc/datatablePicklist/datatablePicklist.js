@@ -16,17 +16,24 @@ export default class DatatablePicklist extends LightningDatatable {
             const value = event.target.value;
             const rowKey = event.target.dataset.context;
             
+            console.log('Picklist change detected:', { value, rowKey });
+            
             // Find the column definition for this cell
             const cellElement = event.target.closest('td');
+            if (!cellElement) {
+                console.error('Could not find cell element');
+                return;
+            }
+            
             const columnIndex = Array.from(cellElement.parentNode.children).indexOf(cellElement);
             const column = this.columns[columnIndex];
             
             if (!column || !column.fieldName) {
-                console.error('Could not determine column field name');
+                console.error('Could not determine column field name', { column, columnIndex });
                 return;
             }
 
-            console.log('Picklist change:', { 
+            console.log('Picklist change processed:', { 
                 value, 
                 rowKey, 
                 fieldName: column.fieldName,
@@ -39,16 +46,17 @@ export default class DatatablePicklist extends LightningDatatable {
                 [column.fieldName]: value 
             }];
 
-            // Use setTimeout to avoid immediate event conflicts
-            setTimeout(() => {
-                this.dispatchEvent(new CustomEvent('cellchange', {
-                    bubbles: true,
-                    composed: true,
-                    detail: {
-                        draftValues: draftValues
-                    }
-                }));
-            }, 0);
+            console.log('Dispatching cellchange with draftValues:', draftValues);
+
+            // Dispatch the cell change event
+            this.dispatchEvent(new CustomEvent('cellchange', {
+                bubbles: true,
+                composed: true,
+                detail: {
+                    draftValues: draftValues
+                }
+            }));
+            
         } catch (error) {
             console.error('Error in handlePicklistChange:', error);
         }

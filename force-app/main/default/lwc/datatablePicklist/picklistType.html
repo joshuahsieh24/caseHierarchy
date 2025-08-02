@@ -5,7 +5,9 @@
                 <select 
                     class="slds-select"
                     data-context={typeAttributes.context}
+                    value={typeAttributes.value}
                     onchange={handlePicklistChange}>
+                    <option value="" disabled>Select an option</option>
                     <template for:each={typeAttributes.options} for:item="option">
                         <option key={option.value} 
                                 value={option.value}
