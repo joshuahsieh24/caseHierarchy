@@ -18,7 +18,7 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     @track isConfigMode = false;
     @track draftColumns = [];
     @track draftValues = [];
-    @track treeGridKey = 'tree-grid-1'; // Add key for forcing re-render
+    @track treeGridKey = 'tree-grid-1';
 
     treeData;
     originalData;
@@ -39,20 +39,28 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         } else if (error) {
             this.hasError = true;
             this.errorMessage = error.body?.message || JSON.stringify(error);
+            console.error('❌ ERROR: Failed to load hierarchy data:', error);
         }
     }
 
     _refreshTreeData() {
         if (!this.originalData) return;
 
-        console.log('🔄 DEBUG: Refreshing tree data with current columns:', JSON.stringify(this.columns, null, 2));
+        console.log('🔄 DEBUG: === REFRESH TREE DATA START ===');
+        console.log('🔄 DEBUG: Original data:', JSON.stringify(this.originalData, null, 2));
+        console.log('🔄 DEBUG: Current columns:', JSON.stringify(this.columns, null, 2));
         
         const root = JSON.parse(JSON.stringify(this.originalData));
         this._normalise([root]);
+        
+        console.log('🔄 DEBUG: Normalized root data:', JSON.stringify(root, null, 2));
+        
         this.treeData = [root];
         this.expandedRows = [root.id];
         
-        console.log('✅ DEBUG: Tree data refreshed:', JSON.stringify(this.treeData, null, 2));
+        console.log('🔄 DEBUG: Final tree data:', JSON.stringify(this.treeData, null, 2));
+        console.log('🔄 DEBUG: Expanded rows:', this.expandedRows);
+        console.log('🔄 DEBUG: === REFRESH TREE DATA COMPLETE ===');
     }
 
     _normalise(nodes) {
@@ -82,12 +90,35 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 requestorCompany: n.requestorCompany || 'N/A'
             };
 
-            // Apply defaults
+            // Apply defaults for any missing fields
             Object.keys(defaults).forEach(key => {
                 if (n[key] === undefined || n[key] === null) {
                     n[key] = defaults[key];
                 }
             });
+
+            // Format dates properly
+            if (n.createdDate) {
+                try {
+                    n.createdDate = new Date(n.createdDate).toISOString();
+                } catch (e) {
+                    console.warn('Invalid createdDate:', n.createdDate);
+                }
+            }
+            if (n.lastModifiedDate) {
+                try {
+                    n.lastModifiedDate = new Date(n.lastModifiedDate).toISOString();
+                } catch (e) {
+                    console.warn('Invalid lastModifiedDate:', n.lastModifiedDate);
+                }
+            }
+            if (n.closedDate) {
+                try {
+                    n.closedDate = new Date(n.closedDate).toISOString();
+                } catch (e) {
+                    console.warn('Invalid closedDate:', n.closedDate);
+                }
+            }
 
             console.log(`🔍 DEBUG: Normalized node ${n.id}:`, {
                 caseNumber: n.caseNumber,
@@ -95,7 +126,8 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 status: n.status,
                 priority: n.priority,
                 ownerName: n.ownerName,
-                accountName: n.accountName
+                accountName: n.accountName,
+                childCount: n.childCount
             });
 
             n._children = (n.children && n.children.length) ? n.children : [];
@@ -165,13 +197,13 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     }
 
     handleToggleConfig() {
-        console.log('🔧 DEBUG: Entering config mode');
+        console.log('🔧 DEBUG: === ENTERING CONFIG MODE ===');
         console.log('🔧 DEBUG: Current columns before config:', JSON.stringify(this.columns, null, 2));
         
         this.isConfigMode = true;
         this.draftColumns = this.columns.map((c, i) => {
             const apiName = this._getApiNameFromColumn(c);
-            console.log(`🔧 DEBUG: Column ${i}: "${c.label}" -> "${apiName}"`);
+            console.log(`🔧 DEBUG: Column ${i}: "${c.label}" -> API name: "${apiName}"`);
             
             return {
                 _id: (i + 1).toString(),
@@ -187,28 +219,34 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         this.draftValues = [];
         
         console.log('🔧 DEBUG: Draft columns created:', JSON.stringify(this.draftColumns, null, 2));
+        console.log('🔧 DEBUG: === CONFIG MODE READY ===');
     }
 
     handleAdd() {
+        console.log('➕ DEBUG: Adding new column');
         const newId = (this.draftColumns.length + 1).toString();
-        this.draftColumns = [
-            ...this.draftColumns,
-            { 
-                _id: newId, 
-                label: 'New Column', 
-                fieldName: 'caseNumber',
-                type: 'text',
-                optionsWithSelection: this.availableApiNames.map(option => ({
-                    ...option,
-                    isSelected: option.value === 'caseNumber'
-                }))
-            }
-        ];
+        const newColumn = { 
+            _id: newId, 
+            label: 'New Column', 
+            fieldName: 'caseNumber',
+            type: 'text',
+            optionsWithSelection: this.availableApiNames.map(option => ({
+                ...option,
+                isSelected: option.value === 'caseNumber'
+            }))
+        };
+        
+        this.draftColumns = [...this.draftColumns, newColumn];
+        console.log('➕ DEBUG: New column added:', JSON.stringify(newColumn, null, 2));
     }
 
     handleRowAction(evt) {
+        console.log('🗑️ DEBUG: Row action triggered:', JSON.stringify(evt.detail, null, 2));
+        
         if (evt.detail.action.name === 'remove') {
             const rowId = evt.detail.row._id;
+            console.log(`🗑️ DEBUG: Removing column with ID: ${rowId}`);
+            
             this.draftColumns = this.draftColumns.filter(c => c._id !== rowId);
             this.draftValues = this.draftValues.filter(dv => dv._id !== rowId);
             
@@ -217,20 +255,24 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 ...col,
                 _id: (index + 1).toString()
             }));
+            
+            console.log('🗑️ DEBUG: Columns after removal:', JSON.stringify(this.draftColumns, null, 2));
         }
     }
 
     handleCellChange(evt) {
-        console.log('📝 DEBUG: Cell change event:', JSON.stringify(evt.detail, null, 2));
+        console.log('📝 DEBUG: === CELL CHANGE EVENT ===');
+        console.log('📝 DEBUG: Raw event detail:', JSON.stringify(evt.detail, null, 2));
         
         const newDraftValues = evt.detail.draftValues || [];
         
         newDraftValues.forEach(newDraft => {
-            console.log('📝 DEBUG: Processing draft:', JSON.stringify(newDraft, null, 2));
+            console.log('📝 DEBUG: Processing draft change:', JSON.stringify(newDraft, null, 2));
             
             const rowId = newDraft._id;
             const existingIndex = this.draftValues.findIndex(existing => existing._id === rowId);
             
+            // Update draft values
             if (existingIndex !== -1) {
                 this.draftValues[existingIndex] = { 
                     ...this.draftValues[existingIndex], 
@@ -240,7 +282,7 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 this.draftValues.push({ ...newDraft });
             }
             
-            // Update the draft column
+            // Update the actual draft column data
             const columnIndex = this.draftColumns.findIndex(col => col._id === rowId);
             if (columnIndex !== -1) {
                 const updatedColumn = { ...this.draftColumns[columnIndex] };
@@ -248,6 +290,8 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 if (newDraft.fieldName !== undefined) {
                     console.log(`📝 DEBUG: Changing API name from "${updatedColumn.fieldName}" to "${newDraft.fieldName}"`);
                     updatedColumn.fieldName = newDraft.fieldName;
+                    
+                    // Update the options selection
                     updatedColumn.optionsWithSelection = this.availableApiNames.map(option => ({
                         ...option,
                         isSelected: option.value === newDraft.fieldName
@@ -259,55 +303,114 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                     updatedColumn.label = newDraft.label;
                 }
                 
-                this.draftColumns[columnIndex] = updatedColumn;
+                // Replace the column in the array
+                this.draftColumns = [
+                    ...this.draftColumns.slice(0, columnIndex),
+                    updatedColumn,
+                    ...this.draftColumns.slice(columnIndex + 1)
+                ];
             }
         });
         
-        // Force reactivity
+        // Force reactivity by creating new arrays
         this.draftValues = [...this.draftValues];
-        this.draftColumns = [...this.draftColumns];
         
+        console.log('📝 DEBUG: Updated draft values:', JSON.stringify(this.draftValues, null, 2));
         console.log('📝 DEBUG: Updated draft columns:', JSON.stringify(this.draftColumns, null, 2));
+        console.log('📝 DEBUG: === CELL CHANGE COMPLETE ===');
     }
 
     handleSave() {
         console.log('💾 DEBUG: === SAVE OPERATION START ===');
-        console.log('💾 DEBUG: Draft columns to process:', JSON.stringify(this.draftColumns, null, 2));
+        console.log('💾 DEBUG: Current draft columns:', JSON.stringify(this.draftColumns, null, 2));
+        console.log('💾 DEBUG: Current draft values:', JSON.stringify(this.draftValues, null, 2));
         
-        // Build new columns array
-        const newColumns = this.draftColumns
-            .filter(col => col.fieldName && col.label && col.label.trim() !== '')
-            .map((col, index) => {
-                const builtColumn = this._buildColumn(col.label, col.fieldName);
-                console.log(`💾 DEBUG: Built column ${index}:`, JSON.stringify(builtColumn, null, 2));
-                return builtColumn;
+        try {
+            // Apply any pending draft values to draft columns
+            this.draftValues.forEach(draftValue => {
+                const columnIndex = this.draftColumns.findIndex(col => col._id === draftValue._id);
+                if (columnIndex !== -1) {
+                    const updatedColumn = { ...this.draftColumns[columnIndex] };
+                    
+                    if (draftValue.fieldName !== undefined) {
+                        updatedColumn.fieldName = draftValue.fieldName;
+                        updatedColumn.optionsWithSelection = this.availableApiNames.map(option => ({
+                            ...option,
+                            isSelected: option.value === draftValue.fieldName
+                        }));
+                    }
+                    
+                    if (draftValue.label !== undefined) {
+                        updatedColumn.label = draftValue.label;
+                    }
+                    
+                    this.draftColumns[columnIndex] = updatedColumn;
+                }
             });
 
-        console.log('💾 DEBUG: Final new columns array:', JSON.stringify(newColumns, null, 2));
+            console.log('💾 DEBUG: Draft columns after applying draft values:', JSON.stringify(this.draftColumns, null, 2));
 
-        // Exit config mode first
-        this.isConfigMode = false;
-        this.draftColumns = [];
-        this.draftValues = [];
+            // Build new columns array from current draft state
+            const newColumns = this.draftColumns
+                .filter(col => {
+                    const isValid = col.fieldName && col.label && col.label.trim() !== '';
+                    if (!isValid) {
+                        console.warn('💾 DEBUG: Filtering out invalid column:', col);
+                    }
+                    return isValid;
+                })
+                .map((col, index) => {
+                    const builtColumn = this._buildColumn(col.label, col.fieldName);
+                    console.log(`💾 DEBUG: Built column ${index}:`, JSON.stringify(builtColumn, null, 2));
+                    return builtColumn;
+                });
 
-        // Force complete refresh by clearing everything first
-        console.log('💾 DEBUG: Clearing tree data and columns...');
-        this.treeData = null;
-        this.columns = [];
-        this.expandedRows = [];
+            console.log('💾 DEBUG: Final new columns array:', JSON.stringify(newColumns, null, 2));
 
-        // Use setTimeout to ensure the clear is processed before setting new data
-        setTimeout(() => {
-            console.log('💾 DEBUG: Setting new columns and refreshing data...');
-            this.columns = [...newColumns];
-            this.treeGridKey = 'tree-grid-' + Date.now(); // Force complete re-render
-            this._refreshTreeData();
-        }, 50);
-        
-        console.log('💾 DEBUG: === SAVE OPERATION END ===');
+            if (newColumns.length === 0) {
+                console.error('💾 ERROR: No valid columns to save!');
+                return;
+            }
+
+            // Exit config mode first
+            this.isConfigMode = false;
+            this.draftColumns = [];
+            this.draftValues = [];
+
+            // Clear everything to force complete re-render
+            this.treeData = null;
+            this.columns = [];
+            this.expandedRows = [];
+            
+            // Generate new key to force re-render
+            const newKey = 'tree-grid-' + Date.now();
+            console.log('💾 DEBUG: New tree grid key:', newKey);
+            this.treeGridKey = newKey;
+
+            // Set new columns and refresh in next tick
+            Promise.resolve().then(() => {
+                console.log('💾 DEBUG: Setting new columns...');
+                this.columns = [...newColumns];
+                
+                return Promise.resolve();
+            }).then(() => {
+                console.log('💾 DEBUG: Refreshing tree data...');
+                this._refreshTreeData();
+                console.log('💾 DEBUG: Tree data after refresh:', JSON.stringify(this.treeData, null, 2));
+                console.log('💾 DEBUG: === SAVE OPERATION COMPLETE ===');
+            }).catch(error => {
+                console.error('💾 ERROR: Promise chain failed:', error);
+            });
+            
+        } catch (error) {
+            console.error('💾 ERROR: Save operation failed:', error);
+            this.hasError = true;
+            this.errorMessage = 'Failed to save column configuration: ' + error.message;
+        }
     }
 
     handleCancel() {
+        console.log('❌ DEBUG: Cancelling config mode');
         this.isConfigMode = false;
         this.draftColumns = [];
         this.draftValues = [];
@@ -325,7 +428,7 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         console.log(`🏗️ DEBUG: Building column "${label}" with fieldName "${fieldName}"`);
         
         const base = { 
-            label, 
+            label: label.trim(), 
             fieldName, 
             initialWidth: 120,
             minColumnWidth: 80, 
@@ -348,31 +451,71 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         }
 
         // Handle other field types
+        let result;
         switch (fieldName) {
             case 'subject':
             case 'description':
-                return { ...base, wrapText: true, initialWidth: 300 };
+                result = { ...base, type: 'text', wrapText: true, initialWidth: 300 };
+                break;
             case 'childCount':
-                return { ...base, type: 'number', initialWidth: 100 };
+                result = { ...base, type: 'number', initialWidth: 100 };
+                break;
             case 'createdDate':
             case 'lastModifiedDate':
             case 'closedDate':
-                return { ...base, type: 'date', initialWidth: 140 };
+                result = { ...base, type: 'date', initialWidth: 140 };
+                break;
             case 'isEscalated':
             case 'isClosed':
-                return { ...base, type: 'boolean', initialWidth: 110 };
+                result = { ...base, type: 'boolean', initialWidth: 110 };
+                break;
             case 'requestorEmail':
-                return { ...base, type: 'email', initialWidth: 200 };
+                result = { ...base, type: 'email', initialWidth: 200 };
+                break;
             case 'requestorPhone':
-                return { ...base, type: 'phone', initialWidth: 150 };
+                result = { ...base, type: 'phone', initialWidth: 150 };
+                break;
             default:
-                const result = { ...base, type: 'text' };
-                console.log(`🏗️ DEBUG: Built default text column:`, JSON.stringify(result, null, 2));
-                return result;
+                result = { ...base, type: 'text' };
+                break;
         }
+        
+        console.log(`🏗️ DEBUG: Built column result:`, JSON.stringify(result, null, 2));
+        return result;
     }
 
     handleRowToggle(e) {
         this.expandedRows = e.detail.expandedRows;
+        console.log('🌳 DEBUG: Row toggle - expanded rows:', this.expandedRows);
+    }
+
+    // Debug method to test data structure
+    debugDataStructure() {
+        console.log('🧪 DEBUG: === DATA STRUCTURE TEST ===');
+        console.log('🧪 DEBUG: Current columns:', JSON.stringify(this.columns, null, 2));
+        console.log('🧪 DEBUG: Current tree data:', JSON.stringify(this.treeData, null, 2));
+        
+        if (this.treeData && this.treeData.length > 0) {
+            const firstNode = this.treeData[0];
+            console.log('🧪 DEBUG: First node properties:');
+            Object.keys(firstNode).forEach(key => {
+                console.log(`🧪   ${key}: ${firstNode[key]}`);
+            });
+            
+            if (firstNode._children && firstNode._children.length > 0) {
+                const firstChild = firstNode._children[0];
+                console.log('🧪 DEBUG: First child properties:');
+                Object.keys(firstChild).forEach(key => {
+                    console.log(`🧪   ${key}: ${firstChild[key]}`);
+                });
+            }
+        }
+        console.log('🧪 DEBUG: === DATA STRUCTURE TEST COMPLETE ===');
+    }
+
+    // Add this method to be called from browser console for debugging
+    connectedCallback() {
+        // Expose debug method to global scope for testing
+        window.debugCaseHierarchy = () => this.debugDataStructure();
     }
 }

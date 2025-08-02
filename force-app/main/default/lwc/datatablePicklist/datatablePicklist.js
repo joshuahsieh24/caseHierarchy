@@ -16,24 +16,25 @@ export default class DatatablePicklist extends LightningDatatable {
             const value = event.target.value;
             const rowKey = event.target.dataset.context;
             
-            console.log('Picklist change detected:', { value, rowKey });
+            console.log('🎯 PICKLIST: Change detected:', { value, rowKey });
             
             // Find the column definition for this cell
             const cellElement = event.target.closest('td');
             if (!cellElement) {
-                console.error('Could not find cell element');
+                console.error('🎯 PICKLIST ERROR: Could not find cell element');
                 return;
             }
             
+            // Get column index and field name
             const columnIndex = Array.from(cellElement.parentNode.children).indexOf(cellElement);
             const column = this.columns[columnIndex];
             
             if (!column || !column.fieldName) {
-                console.error('Could not determine column field name', { column, columnIndex });
+                console.error('🎯 PICKLIST ERROR: Could not determine column field name', { column, columnIndex });
                 return;
             }
 
-            console.log('Picklist change processed:', { 
+            console.log('🎯 PICKLIST: Change processed:', { 
                 value, 
                 rowKey, 
                 fieldName: column.fieldName,
@@ -46,19 +47,23 @@ export default class DatatablePicklist extends LightningDatatable {
                 [column.fieldName]: value 
             }];
 
-            console.log('Dispatching cellchange with draftValues:', draftValues);
+            console.log('🎯 PICKLIST: Dispatching cellchange with draftValues:', draftValues);
 
-            // Dispatch the cell change event
-            this.dispatchEvent(new CustomEvent('cellchange', {
+            // Dispatch the cell change event with proper detail structure
+            const cellChangeEvent = new CustomEvent('cellchange', {
                 bubbles: true,
                 composed: true,
                 detail: {
                     draftValues: draftValues
                 }
-            }));
+            });
+            
+            this.dispatchEvent(cellChangeEvent);
+            
+            console.log('🎯 PICKLIST: Event dispatched successfully');
             
         } catch (error) {
-            console.error('Error in handlePicklistChange:', error);
+            console.error('🎯 PICKLIST ERROR: Error in handlePicklistChange:', error);
         }
     }
 }

@@ -40,23 +40,31 @@
 
                 <!-- simple error message (replaces c:error-panel) -->
                 <template if:true={hasError}>
-                    <p class="slds-text-color_error slds-m-top_small">{errorMessage}</p>
+                    <div class="slds-notify slds-notify_alert slds-theme_alert-texture slds-theme_error slds-m-top_small" role="alert">
+                        <span class="slds-assistive-text">Error</span>
+                        <h2>{errorMessage}</h2>
+                    </div>
                 </template>
 
                 <template if:true={noCasesFound}>
-                    <p class="slds-m-top_medium">No cases found for this record.</p>
+                    <div class="slds-notify slds-notify_alert slds-theme_alert-texture slds-theme_info slds-m-top_medium" role="alert">
+                        <span class="slds-assistive-text">Info</span>
+                        <h2>No cases found for this record.</h2>
+                    </div>
                 </template>
 
                 <template if:false={noCasesFound}>
-                    <lightning-tree-grid
-                        key={treeGridKey}
-                        key-field="id"
-                        columns={columns}
-                        data={treeData}
-                        expanded-rows={expandedRows}
-                        onrowtoggle={handleRowToggle}
-                        is-loading={isLoading}>
-                    </lightning-tree-grid>
+                    <div class="slds-m-top_medium">
+                        <lightning-tree-grid
+                            key={treeGridKey}
+                            key-field="id"
+                            columns={columns}
+                            data={treeData}
+                            expanded-rows={expandedRows}
+                            onrowtoggle={handleRowToggle}
+                            is-loading={isLoading}>
+                        </lightning-tree-grid>
+                    </div>
                 </template>
             </div>
         </lightning-card>
