@@ -64,13 +64,26 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
             { label: 'Closed Date', value: 'closedDate' },
             { label: 'Escalated?', value: 'isEscalated' },
             { label: 'Closed?', value: 'isClosed' },
-            { label: 'Child Count', value: 'childCount' }
+            { label: 'Child Count', value: 'childCount' },
+            { label: 'Origin', value: 'origin' },
+            { label: 'Description', value: 'description' },
+            { label: 'AE/AM', value: 'aeAm' },
+            { label: 'Requestor Name', value: 'requestorName' },
+            { label: 'Requestor Email', value: 'requestorEmail' },
+            { label: 'Requestor Phone', value: 'requestorPhone' },
+            { label: 'Requestor Company', value: 'requestorCompany' }
         ];
     }
 
     get configColumns() {
         return [
-            { label: 'Label', fieldName: 'label', type: 'text', editable: true },
+            { 
+                label: 'Label', 
+                fieldName: 'label', 
+                type: 'text', 
+                editable: true,
+                wrapText: true
+            },
             {
                 label: 'API Name',
                 fieldName: 'fieldName',
@@ -100,14 +113,25 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
 
     handleToggleConfig() {
         this.isConfigMode = true;
-        this.draftColumns = this.columns.map((c, i) => ({ ...c, _id: i }));
+        this.draftColumns = this.columns.map((c, i) => ({ 
+            ...c, 
+            _id: (i + 1).toString(), // Use i+1 to start from 1 instead of 0
+            // Ensure we have the actual fieldName for the picklist
+            fieldName: c.fieldName
+        }));
         this.draftValues = [];
     }
 
     handleAdd() {
+        const newId = (this.draftColumns.length + 1).toString(); // Use sequential numbering
         this.draftColumns = [
             ...this.draftColumns,
-            { _id: Date.now(), label: 'New column', fieldName: 'caseNumber' }
+            { 
+                _id: newId, 
+                label: 'New Column', 
+                fieldName: 'caseNumber',
+                type: 'text'
+            }
         ];
     }
 
@@ -115,25 +139,62 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         if (evt.detail.action.name === 'remove') {
             const rowId = evt.detail.row._id;
             this.draftColumns = this.draftColumns.filter(c => c._id !== rowId);
+            // Also remove any draft values for this row
+            this.draftValues = this.draftValues.filter(dv => dv._id !== rowId);
+            
+            // Re-number the remaining columns to maintain sequential numbering
+            this.draftColumns = this.draftColumns.map((col, index) => ({
+                ...col,
+                _id: (index + 1).toString()
+            }));
         }
     }
 
     handleCellChange(evt) {
-        this.draftValues = evt.detail.draftValues;
+        console.log('Cell change event:', evt.detail);
+        const newDraftValues = evt.detail.draftValues;
+        
+        // Merge with existing draft values
+        newDraftValues.forEach(newDraft => {
+            const existingIndex = this.draftValues.findIndex(existing => existing._id === newDraft._id);
+            if (existingIndex !== -1) {
+                // Update existing draft value
+                this.draftValues[existingIndex] = { ...this.draftValues[existingIndex], ...newDraft };
+            } else {
+                // Add new draft value
+                this.draftValues.push(newDraft);
+            }
+        });
+        
+        console.log('Updated draft values:', this.draftValues);
+        
+        // Force a re-render by updating the draftValues array reference
+        this.draftValues = [...this.draftValues];
     }
 
     handleSave() {
-        this.draftValues.forEach(dv => {
-            const idx = this.draftColumns.findIndex(c => c._id === dv._id);
-            if (idx !== -1) {
-                this.draftColumns[idx] = { ...this.draftColumns[idx], ...dv };
+        console.log('Saving with draft values:', this.draftValues);
+        
+        // Apply all draft values to the draft columns
+        this.draftValues.forEach(draftValue => {
+            const columnIndex = this.draftColumns.findIndex(col => col._id === draftValue._id);
+            if (columnIndex !== -1) {
+                // Update the column with the draft values
+                this.draftColumns[columnIndex] = { 
+                    ...this.draftColumns[columnIndex], 
+                    ...draftValue 
+                };
             }
         });
 
-        this.columns = this.draftColumns.map(({ label, fieldName }) =>
-            this._buildColumn(label, fieldName)
-        );
+        // Build final columns from draft columns
+        this.columns = this.draftColumns.map(({ label, fieldName }) => {
+            return this._buildColumn(label, fieldName);
+        });
 
+        console.log('Final columns:', this.columns);
+
+        // Exit config mode
         this.isConfigMode = false;
         this.draftColumns = [];
         this.draftValues = [];
@@ -146,14 +207,26 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     }
 
     _buildColumn(label, fieldName) {
-        const base = { label, fieldName, initialWidth: 120,
-                       minColumnWidth: 80, maxColumnWidth: 400 };
+        const base = { 
+            label, 
+            fieldName, 
+            initialWidth: 120,
+            minColumnWidth: 80, 
+            maxColumnWidth: 400 
+        };
 
         switch (fieldName) {
             case 'caseUrl':
-                return { ...base, type: 'url',
-                         typeAttributes: { label: { fieldName: 'caseNumber' }, target: '_blank' } };
+                return { 
+                    ...base, 
+                    type: 'url',
+                    typeAttributes: { 
+                        label: { fieldName: 'caseNumber' }, 
+                        target: '_blank' 
+                    } 
+                };
             case 'subject':
+            case 'description':
                 return { ...base, wrapText: true, initialWidth: 300 };
             case 'childCount':
                 return { ...base, type: 'number', initialWidth: 100 };

@@ -19,7 +19,8 @@ public with sharing class KD_CaseHierarchyController {
             return new CaseWrapper(
                 'no-cases', 'No Cases',
                 'No cases found for this record', 'N/A', 'N/A', 'N/A',
-                null, null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null
             );
         }
 
@@ -44,7 +45,8 @@ public with sharing class KD_CaseHierarchyController {
         for (Case c : [
             SELECT Id, CaseNumber, Subject, Status, Priority, Type, ParentId,
                    CreatedDate, LastModifiedDate, Owner.Name, Account.Name,
-                   Contact.Name, Origin, Description, IsEscalated, IsClosed, ClosedDate
+                   Contact.Name, Origin, Description, IsEscalated, IsClosed, ClosedDate,
+                   AE_AM__c, SuppliedName, SuppliedEmail, SuppliedPhone, SuppliedCompany
             FROM Case WHERE Id IN :allIds
         ]) {
             wrapById.put(
@@ -54,7 +56,8 @@ public with sharing class KD_CaseHierarchyController {
                     c.Priority,      c.Type,            c.CreatedDate,   c.LastModifiedDate,
                     c.Owner?.Name,   c.Account?.Name,   c.Contact?.Name,
                     c.Origin,        c.Description,     c.IsEscalated,   c.IsClosed,
-                    c.ClosedDate
+                    c.ClosedDate,    c.AE_AM__c,        c.SuppliedName,  c.SuppliedEmail,
+                    c.SuppliedPhone, c.SuppliedCompany
                 )
             );
             parentByChild.put(c.Id, c.ParentId);
@@ -99,6 +102,13 @@ public with sharing class KD_CaseHierarchyController {
         @AuraEnabled public Boolean isClosed;
         @AuraEnabled public DateTime closedDate;
 
+        // New fields based on your Case object
+        @AuraEnabled public String aeAm;
+        @AuraEnabled public String requestorName;
+        @AuraEnabled public String requestorEmail;
+        @AuraEnabled public String requestorPhone;
+        @AuraEnabled public String requestorCompany;
+
         @AuraEnabled public Integer childCount = 0;
         @AuraEnabled public List<CaseWrapper> children = new List<CaseWrapper>();
 
@@ -106,7 +116,9 @@ public with sharing class KD_CaseHierarchyController {
                            String priority, String caseType, DateTime createdDate,
                            DateTime lastModifiedDate, String ownerName, String accountName,
                            String contactName, String origin, String description,
-                           Boolean isEscalated, Boolean isClosed, DateTime closedDate) {
+                           Boolean isEscalated, Boolean isClosed, DateTime closedDate,
+                           String aeAm, String requestorName, String requestorEmail,
+                           String requestorPhone, String requestorCompany) {
             this.id = id;
             this.caseNumber = caseNumber;
             this.subject = subject;
@@ -123,6 +135,11 @@ public with sharing class KD_CaseHierarchyController {
             this.isEscalated = isEscalated;
             this.isClosed = isClosed;
             this.closedDate = closedDate;
+            this.aeAm = aeAm;
+            this.requestorName = requestorName;
+            this.requestorEmail = requestorEmail;
+            this.requestorPhone = requestorPhone;
+            this.requestorCompany = requestorCompany;
         }
     }
 }

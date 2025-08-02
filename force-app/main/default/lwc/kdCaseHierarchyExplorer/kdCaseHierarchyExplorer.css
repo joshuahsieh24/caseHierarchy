@@ -2,3 +2,32 @@
 .slds-datatable__actions {
     display: none !important;
 }
+
+/* Hide the default save/cancel buttons in inline edit mode */
+.slds-datatable__cell-edit {
+    position: relative;
+}
+
+.slds-datatable__cell-edit .slds-popover {
+    display: none !important;
+}
+
+/* Ensure picklist dropdown appears properly */
+lightning-combobox {
+    z-index: 9999;
+}
+
+/* Style for the configuration table */
+c-datatable-picklist {
+    display: block;
+    margin-bottom: 1rem;
+}
+
+/* Fix for combobox in datatable cells */
+.slds-datatable td lightning-combobox {
+    width: 100%;
+}
+
+.slds-datatable td lightning-combobox .slds-combobox {
+    width: 100%;
+}
