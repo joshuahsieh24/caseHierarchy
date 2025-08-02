@@ -12,22 +12,74 @@
     display: none !important;
 }
 
-/* Ensure picklist dropdown appears properly */
-lightning-combobox {
-    z-index: 9999;
-}
-
-/* Style for the configuration table */
+/* Critical: Allow dropdown to break out of table constraints */
 c-datatable-picklist {
     display: block;
     margin-bottom: 1rem;
+    overflow: visible !important;
+    position: relative;
 }
 
-/* Fix for combobox in datatable cells */
-.slds-datatable td lightning-combobox {
-    width: 100%;
+/* Force table and cells to allow overflow for dropdowns */
+c-datatable-picklist .slds-table_bordered,
+c-datatable-picklist .slds-table,
+c-datatable-picklist table {
+    overflow: visible !important;
+    position: relative;
 }
 
-.slds-datatable td lightning-combobox .slds-combobox {
-    width: 100%;
+c-datatable-picklist tbody,
+c-datatable-picklist tr,
+c-datatable-picklist td {
+    overflow: visible !important;
+    position: relative;
+}
+
+/* Ensure the cell edit container allows overflow */
+c-datatable-picklist .slds-cell-edit {
+    overflow: visible !important;
+    position: relative;
+    z-index: 1000;
+}
+
+/* Combobox styling for proper dropdown display */
+c-datatable-picklist lightning-combobox {
+    position: relative;
+    z-index: 1001;
+}
+
+c-datatable-picklist lightning-combobox .slds-combobox {
+    position: relative;
+    z-index: 1002;
+}
+
+/* Force dropdown menu to appear above everything */
+c-datatable-picklist lightning-combobox .slds-dropdown,
+c-datatable-picklist lightning-combobox .slds-listbox,
+c-datatable-picklist lightning-combobox .slds-dropdown_fluid {
+    position: absolute !important;
+    z-index: 9999 !important;
+    min-width: 200px !important;
+    max-height: 200px !important;
+    overflow-y: auto !important;
+}
+
+/* Override Salesforce table constraints */
+.slds-datatable {
+    overflow: visible !important;
+    position: relative;
+}
+
+.slds-datatable tbody tr td {
+    overflow: visible !important;
+    position: relative;
+}
+
+/* Ensure dropdown menu is fully visible */
+.slds-dropdown {
+    z-index: 9999 !important;
+    position: absolute !important;
+    box-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.16) !important;
+    border: 1px solid #d8dde6 !important;
+    background: white !important;
 }

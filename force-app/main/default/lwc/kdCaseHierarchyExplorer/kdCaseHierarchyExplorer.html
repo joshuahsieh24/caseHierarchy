@@ -2,19 +2,22 @@
     <!-- ───────────── CONFIGURE COLUMNS MODE ───────────── -->
     <template if:true={isConfigMode}>
         <lightning-card title="Configure Columns">
-            <div class="slds-p-horizontal_small">
-                <c-datatable-picklist
-                    key-field="_id"
-                    data={draftColumns}
-                    columns={configColumns}
-                    draft-values={draftValues}
-                    hide-checkbox-column
-                    suppress-bottom-bar
-                    oncellchange={handleCellChange}
-                    onrowaction={handleRowAction}>
-                </c-datatable-picklist>
+            <div class="slds-p-horizontal_small" style="overflow: visible; position: relative; z-index: 100;">
+                <div style="overflow: visible; position: relative; min-height: 300px;">
+                    <c-datatable-picklist
+                        key-field="_id"
+                        data={draftColumns}
+                        columns={configColumns}
+                        draft-values={draftValues}
+                        hide-checkbox-column
+                        suppress-bottom-bar
+                        oncellchange={handleCellChange}
+                        onrowaction={handleRowAction}
+                        style="overflow: visible; position: relative;">
+                    </c-datatable-picklist>
+                </div>
 
-                <div class="slds-m-top_small slds-align_absolute-center">
+                <div class="slds-m-top_large slds-align_absolute-center">
                     <lightning-button label="Add column" variant="neutral"
                                       onclick={handleAdd}></lightning-button>
                     <lightning-button label="Cancel" variant="destructive-text"

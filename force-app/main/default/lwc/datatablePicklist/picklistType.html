@@ -1,11 +1,20 @@
 <template>
-    <lightning-combobox
-        value={typeAttributes.value}
-        placeholder={typeAttributes.placeholder}
-        options={typeAttributes.options}
-        variant="label-hidden"
-        data-context={typeAttributes.context}
-        onchange={handlePicklistChange}
-        class="slds-size_full">
-    </lightning-combobox>
+    <div class="slds-cell-edit" data-inputable="true">
+        <div class="slds-form-element">
+            <div class="slds-form-element__control">
+                <select 
+                    class="slds-select"
+                    data-context={typeAttributes.context}
+                    onchange={handlePicklistChange}>
+                    <template for:each={typeAttributes.options} for:item="option">
+                        <option key={option.value} 
+                                value={option.value}
+                                selected={option.isSelected}>
+                            {option.label}
+                        </option>
+                    </template>
+                </select>
+            </div>
+        </div>
+    </div>
 </template>

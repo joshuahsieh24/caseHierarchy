@@ -34,7 +34,7 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
             this._normalise([root]);
             this.treeData = [root];
             this.expandedRows = [root.id];
-            this.noCasesFound = root.childCount === 0;
+            this.noCasesFound = root.id === 'no-cases';
         } else if (error) {
             this.hasError = true;
             this.errorMessage = error.body?.message || JSON.stringify(error);
@@ -88,9 +88,8 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
                 label: 'API Name',
                 fieldName: 'fieldName',
                 type: 'picklist',
-                editable: true,
                 typeAttributes: {
-                    options: this.availableApiNames,
+                    options: { fieldName: 'optionsWithSelection' },
                     placeholder: 'Select API Name',
                     value: { fieldName: 'fieldName' },
                     context: { fieldName: '_id' }
@@ -113,24 +112,34 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
 
     handleToggleConfig() {
         this.isConfigMode = true;
-        this.draftColumns = this.columns.map((c, i) => ({ 
-            ...c, 
-            _id: (i + 1).toString(), // Use i+1 to start from 1 instead of 0
-            // Ensure we have the actual fieldName for the picklist
-            fieldName: c.fieldName
-        }));
+        this.draftColumns = this.columns.map((c, i) => {
+            const apiName = this._getApiNameFromColumn(c);
+            return {
+                ...c, 
+                _id: (i + 1).toString(),
+                fieldName: apiName,
+                optionsWithSelection: this.availableApiNames.map(option => ({
+                    ...option,
+                    isSelected: option.value === apiName
+                }))
+            };
+        });
         this.draftValues = [];
     }
 
     handleAdd() {
-        const newId = (this.draftColumns.length + 1).toString(); // Use sequential numbering
+        const newId = (this.draftColumns.length + 1).toString();
         this.draftColumns = [
             ...this.draftColumns,
             { 
                 _id: newId, 
                 label: 'New Column', 
                 fieldName: 'caseNumber',
-                type: 'text'
+                type: 'text',
+                optionsWithSelection: this.availableApiNames.map(option => ({
+                    ...option,
+                    isSelected: option.value === 'caseNumber'
+                }))
             }
         ];
     }
@@ -139,10 +148,9 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         if (evt.detail.action.name === 'remove') {
             const rowId = evt.detail.row._id;
             this.draftColumns = this.draftColumns.filter(c => c._id !== rowId);
-            // Also remove any draft values for this row
             this.draftValues = this.draftValues.filter(dv => dv._id !== rowId);
             
-            // Re-number the remaining columns to maintain sequential numbering
+            // Re-number the remaining columns
             this.draftColumns = this.draftColumns.map((col, index) => ({
                 ...col,
                 _id: (index + 1).toString()
@@ -151,53 +159,82 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
     }
 
     handleCellChange(evt) {
-        console.log('Cell change event:', evt.detail);
-        const newDraftValues = evt.detail.draftValues;
+        console.log('Cell change event received:', evt.detail);
+        const newDraftValues = evt.detail.draftValues || [];
         
-        // Merge with existing draft values
+        // Update draft values and refresh options for changed rows
         newDraftValues.forEach(newDraft => {
             const existingIndex = this.draftValues.findIndex(existing => existing._id === newDraft._id);
             if (existingIndex !== -1) {
-                // Update existing draft value
-                this.draftValues[existingIndex] = { ...this.draftValues[existingIndex], ...newDraft };
+                // Merge with existing draft value
+                this.draftValues[existingIndex] = { 
+                    ...this.draftValues[existingIndex], 
+                    ...newDraft 
+                };
             } else {
                 // Add new draft value
                 this.draftValues.push(newDraft);
             }
+            
+            // Update the options for this row to show the new selection
+            if (newDraft.fieldName) {
+                const columnIndex = this.draftColumns.findIndex(col => col._id === newDraft._id);
+                if (columnIndex !== -1) {
+                    this.draftColumns[columnIndex].optionsWithSelection = this.availableApiNames.map(option => ({
+                        ...option,
+                        isSelected: option.value === newDraft.fieldName
+                    }));
+                }
+            }
         });
         
-        console.log('Updated draft values:', this.draftValues);
-        
-        // Force a re-render by updating the draftValues array reference
+        // Force reactivity
         this.draftValues = [...this.draftValues];
+        this.draftColumns = [...this.draftColumns];
+        
+        console.log('Updated draft values:', this.draftValues);
+        console.log('Updated draft columns:', this.draftColumns);
     }
 
     handleSave() {
         console.log('Saving with draft values:', this.draftValues);
         
-        // Apply all draft values to the draft columns
-        this.draftValues.forEach(draftValue => {
-            const columnIndex = this.draftColumns.findIndex(col => col._id === draftValue._id);
-            if (columnIndex !== -1) {
-                // Update the column with the draft values
-                this.draftColumns[columnIndex] = { 
-                    ...this.draftColumns[columnIndex], 
-                    ...draftValue 
-                };
+        // Apply draft values to columns
+        const updatedColumns = this.draftColumns.map(column => {
+            const draftValue = this.draftValues.find(dv => dv._id === column._id);
+            if (draftValue) {
+                return { ...column, ...draftValue };
             }
+            return column;
         });
 
-        // Build final columns from draft columns
-        this.columns = this.draftColumns.map(({ label, fieldName }) => {
-            return this._buildColumn(label, fieldName);
-        });
+        // Build final columns - remove any columns without valid fieldName
+        this.columns = updatedColumns
+            .filter(col => col.fieldName && col.label)
+            .map(({ label, fieldName }) => {
+                return this._buildColumn(label, fieldName);
+            });
 
-        console.log('Final columns:', this.columns);
+        console.log('Final columns applied:', this.columns);
+
+        // Force a refresh of the tree grid to reflect column changes
+        if (this.treeData) {
+            // Create a new reference to trigger reactivity
+            this.treeData = [...this.treeData];
+        }
 
         // Exit config mode
         this.isConfigMode = false;
         this.draftColumns = [];
         this.draftValues = [];
+    }
+
+    _getApiNameFromColumn(column) {
+        // Handle special case where caseUrl maps back to caseNumber
+        if (column.fieldName === 'caseUrl' && column.type === 'url') {
+            return 'caseNumber';
+        }
+        return column.fieldName;
     }
 
     handleCancel() {
@@ -214,6 +251,19 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
             minColumnWidth: 80, 
             maxColumnWidth: 400 
         };
+
+        // Handle special case for case number URL
+        if (fieldName === 'caseNumber') {
+            return { 
+                ...base, 
+                fieldName: 'caseUrl',
+                type: 'url',
+                typeAttributes: { 
+                    label: { fieldName: 'caseNumber' }, 
+                    target: '_blank' 
+                } 
+            };
+        }
 
         switch (fieldName) {
             case 'caseUrl':
@@ -240,6 +290,14 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
             default:
                 return base;
         }
+    }
+
+    _getApiNameFromColumn(column) {
+        // Handle special case where caseUrl maps back to caseNumber
+        if (column.fieldName === 'caseUrl' && column.type === 'url') {
+            return 'caseNumber';
+        }
+        return column.fieldName;
     }
 
     handleRowToggle(e) {

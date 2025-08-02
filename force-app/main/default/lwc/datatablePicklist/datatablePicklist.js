@@ -6,42 +6,51 @@ export default class DatatablePicklist extends LightningDatatable {
         picklist: {
             template: picklistTemplate,
             standardCellLayout: true,
-            typeAttributes: ['options', 'value', 'placeholder', 'context']
+            typeAttributes: ['options', 'value', 'placeholder', 'context'],
+            editTemplate: picklistTemplate
         }
     };
 
     handlePicklistChange(event) {
-        event.stopPropagation();
-        event.preventDefault();
-
-        const value = event.detail.value;
-        const rowKey = event.target.dataset.context;
-        
-        // Get the column field name from the datatable's internal structure
-        const colKey = this._columnDefinition?.fieldName;
-
-        console.log('Picklist change:', { value, rowKey, colKey, columnDef: this._columnDefinition });
-
-        if (!colKey) {
-            console.error('Could not determine column field name');
-            return;
-        }
-
-        // Create the draft values in the format expected by lightning-datatable
-        const draftValues = [{ 
-            _id: rowKey, 
-            [colKey]: value 
-        }];
-
-        // Dispatch the custom event that lightning-datatable expects
-        this.dispatchEvent(new CustomEvent('privateeditcustomcellchange', {
-            bubbles: true, 
-            composed: true, 
-            cancelable: true,
-            detail: {
-                rowKeyValue: rowKey,
-                draftValues: draftValues
+        try {
+            const value = event.target.value;
+            const rowKey = event.target.dataset.context;
+            
+            // Find the column definition for this cell
+            const cellElement = event.target.closest('td');
+            const columnIndex = Array.from(cellElement.parentNode.children).indexOf(cellElement);
+            const column = this.columns[columnIndex];
+            
+            if (!column || !column.fieldName) {
+                console.error('Could not determine column field name');
+                return;
             }
-        }));
+
+            console.log('Picklist change:', { 
+                value, 
+                rowKey, 
+                fieldName: column.fieldName,
+                columnIndex 
+            });
+
+            // Create the draft values in the format expected by lightning-datatable
+            const draftValues = [{ 
+                _id: rowKey, 
+                [column.fieldName]: value 
+            }];
+
+            // Use setTimeout to avoid immediate event conflicts
+            setTimeout(() => {
+                this.dispatchEvent(new CustomEvent('cellchange', {
+                    bubbles: true,
+                    composed: true,
+                    detail: {
+                        draftValues: draftValues
+                    }
+                }));
+            }, 0);
+        } catch (error) {
+            console.error('Error in handlePicklistChange:', error);
+        }
     }
 }
