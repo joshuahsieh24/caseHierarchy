@@ -1,53 +1,49 @@
 <template>
-    <!-- ───────────── CONFIGURE COLUMNS MODE ───────────── -->
+    <!-- CONFIG MODE -->
     <template if:true={isConfigMode}>
         <lightning-card title="Configure Columns">
-            <div class="slds-p-horizontal_small" style="overflow: visible; position: relative; z-index: 100;">
-                <div style="overflow: visible; position: relative; min-height: 300px;">
-                    <c-datatable-picklist
-                        key-field="_id"
-                        data={draftColumns}
-                        columns={configColumns}
-                        draft-values={draftValues}
-                        hide-checkbox-column
-                        suppress-bottom-bar
-                        oncellchange={handleCellChange}
-                        onrowaction={handleRowAction}
-                        style="overflow: visible; position: relative;">
-                    </c-datatable-picklist>
-                </div>
+            <div class="slds-p-horizontal_small">
+                <lightning-dual-listbox
+                    name="cols"
+                    label="Columns"
+                    source-label="Available"
+                    selected-label="Shown"
+                    options={columnOptions}
+                    value={selectedKeys}
+                    onchange={handleColumnPick}>
+                </lightning-dual-listbox>
 
-                <div class="slds-m-top_large slds-align_absolute-center">
-                    <lightning-button label="Add column" variant="neutral"
-                                      onclick={handleAdd}></lightning-button>
-                    <lightning-button label="Cancel" variant="destructive-text"
-                                      class="slds-m-left_x-small"
-                                      onclick={handleCancel}></lightning-button>
-                    <lightning-button label="Save" variant="brand"
-                                      class="slds-m-left_x-small"
-                                      onclick={handleSave}></lightning-button>
+                <div class="slds-m-top_medium">
+                    <lightning-button label="Cancel"
+                                      onclick={handleCancel}>
+                    </lightning-button>
+                    <lightning-button class="slds-m-left_small"
+                                      variant="brand"
+                                      label="Save"
+                                      onclick={handleSave}>
+                    </lightning-button>
                 </div>
             </div>
         </lightning-card>
     </template>
 
-    <!-- ───────────── NORMAL VIEW MODE ───────────── -->
+    <!-- NORMAL VIEW -->
     <template if:false={isConfigMode}>
         <lightning-card title="Case Hierarchy">
             <div class="slds-p-horizontal_small">
                 <lightning-button label="Configure Columns"
-                                  onclick={handleToggleConfig}></lightning-button>
+                                  onclick={handleToggleConfig}>
+                </lightning-button>
 
-                <!-- simple error message (replaces c:error-panel) -->
                 <template if:true={hasError}>
-                    <div class="slds-notify slds-notify_alert slds-theme_alert-texture slds-theme_error slds-m-top_small" role="alert">
+                    <div class="slds-notify slds-notify_alert slds-theme_error slds-m-top_small" role="alert">
                         <span class="slds-assistive-text">Error</span>
                         <h2>{errorMessage}</h2>
                     </div>
                 </template>
 
                 <template if:true={noCasesFound}>
-                    <div class="slds-notify slds-notify_alert slds-theme_alert-texture slds-theme_info slds-m-top_medium" role="alert">
+                    <div class="slds-notify slds-notify_alert slds-theme_info slds-m-top_medium" role="alert">
                         <span class="slds-assistive-text">Info</span>
                         <h2>No cases found for this record.</h2>
                     </div>
