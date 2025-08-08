@@ -1,5 +1,5 @@
 import { LightningElement, api, wire, track } from 'lwc';
-import getHierarchy from '@salesforce/apex/KD_CaseHierarchyController.getHierarchy';
+import getHierarchy from '@salesforce/apex/CaseHierarchyController.getHierarchy';
 
 /* ────────────────────────────────────────────────────────────
    Column definitions (names, links, types)
@@ -57,7 +57,7 @@ const DEFAULT_FIELD_NAMES = [
     'workGroupUrl'
 ];
 
-export default class KdCaseHierarchyExplorer extends LightningElement {
+export default class CaseHierarchyExplorer extends LightningElement {
 
     /* ───────────── Public API ───────────── */
     @api recordId;
@@ -123,7 +123,21 @@ export default class KdCaseHierarchyExplorer extends LightningElement {
         const root = JSON.parse(JSON.stringify(this.originalData));
         this._normalise([root]);
         this.treeData     = [root];
-        this.expandedRows = [root.id];
+        this.expandedRows = this._collectAllNodeIds([root]);
+    }
+
+    /**
+     * Recursively collect all node IDs to expand the entire hierarchy
+     */
+    _collectAllNodeIds(nodes) {
+        const allIds = [];
+        nodes.forEach(node => {
+            allIds.push(node.id);
+            if (node._children && node._children.length > 0) {
+                allIds.push(...this._collectAllNodeIds(node._children));
+            }
+        });
+        return allIds;
     }
 
     /**
